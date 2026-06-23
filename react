@@ -1,0 +1,215 @@
+// Updated React Version with Green, Yellow, and Black Feedback Dots and Audio Fix
+
+import React, { useState, useEffect, useRef } from 'react';
+
+const COLORS = ["red", "blue", "green", "yellow", "white", "black"];
+const CODE_LENGTH = 4;
+const MAX_ATTEMPTS = 10;
+
+function generateCode() {
+  let code = [];
+  while (code.length < CODE_LENGTH) {
+    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    code.push(color);
+  }
+  return code;
+}
+
+function getDetailedFeedback(guess, code) {
+  const result = Array(CODE_LENGTH).fill("none");
+  const codeCopy = [...code];
+  const guessCopy = [...guess];
+
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    if (guess[i] === code[i]) {
+      result[i] = "exact";
+      codeCopy[i] = null;
+      guessCopy[i] = null;
+    }
+  }
+
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    if (guessCopy[i]) {
+      const index = codeCopy.indexOf(guessCopy[i]);
+      if (index !== -1) {
+        result[i] = "partial";
+        codeCopy[index] = null;
+      }
+    }
+  }
+
+  return result;
+}
+
+export default function MastermindApp() {
+  const [code, setCode] = useState([]);
+  const [guesses, setGuesses] = useState([]);
+  const [currentGuess, setCurrentGuess] = useState(Array(CODE_LENGTH).fill(""));
+  const [status, setStatus] = useState("playing");
+  const winAudioRef = useRef(null);
+  const loseAudioRef = useRef(null);
+  const feedbackAudioRef = useRef(null);
+  const snapAudioRef = useRef(null);
+
+  useEffect(() => {
+    setCode(generateCode());
+
+    const unlockAudio = () => {
+    if (snapAudioRef.current) {
+      snapAudioRef.current.load();
+    }
+      window.removeEventListener('click', unlockAudio);
+    };
+
+    window.addEventListener('click', unlockAudio);
+  }, []);
+
+  const handleDrop = (e, index) => {
+    e.preventDefault();
+    snapAudioRef.current?.play();
+    e.currentTarget.style.transform = 'scale(1.2)';
+    setTimeout(() => {
+      e.currentTarget.style.transform = 'scale(1)';
+    }, 150);
+    const color = e.dataTransfer.getData("text/plain");
+    const newGuess = [...currentGuess];
+    newGuess[index] = color;
+    setCurrentGuess(newGuess);
+  };
+
+  const handleDragStart = (e, color) => {
+    e.dataTransfer.setData("text/plain", color);
+  };
+
+  const allowDrop = (e) => {
+    e.preventDefault();
+  };
+
+  const handleSubmit = () => {
+    if (currentGuess.includes("")) return;
+    const feedbackDetail = getDetailedFeedback(currentGuess, code);
+    const exact = feedbackDetail.filter(f => f === "exact").length;
+    const partial = feedbackDetail.filter(f => f === "partial").length;
+    const feedback = { exact, partial, detail: feedbackDetail };
+
+    const newGuesses = [...guesses, { guess: currentGuess, feedback }];
+    setGuesses(newGuesses);
+
+    if (exact === CODE_LENGTH) {
+      setStatus("won");
+      winAudioRef.current?.play();
+    } else if (newGuesses.length >= MAX_ATTEMPTS) {
+      setStatus("lost");
+      loseAudioRef.current?.play();
+    } else {
+      if ((exact > 0 || partial > 0) && feedbackAudioRef.current) {
+        feedbackAudioRef.current.play();
+      }
+      setCurrentGuess(Array(CODE_LENGTH).fill(""));
+    }
+  };
+
+  const resetGame = () => {
+    setCode(generateCode());
+    setGuesses([]);
+    setCurrentGuess(Array(CODE_LENGTH).fill(""));
+    setStatus("playing");
+  };
+
+  return (
+    <div style={{ display: 'flex', maxWidth: 800, margin: '2rem auto', padding: '1rem', fontFamily: 'sans-serif' }}>
+      <div style={{ flex: 1 }}>
+        <h1 style={{ fontWeight: 'bold', textAlign: 'center', fontSize: '2rem' }}>🎯 MASTERMIND ONLINE 🎯</h1>
+
+<div style={{ margin: '1rem 0', padding: '1rem', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+  <h3 style={{ fontWeight: 'bold' }}>📜 Instructions</h3>
+  <p>
+    Mastermind is an old board game. This is a quick web version of it. It's a bit like Wordle but with colors.
+    <br /><br />
+    To play, hold down a color and drag it to an empty circle. When you have filled each of the 4 circles, click "Submit Guess".
+  </p>
+</div>
+
+        <audio ref={winAudioRef}>
+          <source src="https://cdn.pixabay.com/download/audio/2022/08/12/audio_59cd2fc705.mp3?filename=success-fanfare-trumpets-6185.mp3" type="audio/mp3" />
+        </audio>
+        <audio ref={loseAudioRef}>
+          <source src="https://cdn.pixabay.com/download/audio/2022/11/01/audio_14be51a117.mp3?filename=you-lost-121573.mp3" type="audio/mp3" />
+        </audio>
+        <audio ref={snapAudioRef}>
+  <source src="https://cdn.pixabay.com/download/audio/2022/03/23/audio_5875e1ab9b.mp3?filename=button-press-112242.mp3" type="audio/mp3" />
+</audio>
+
+        {status === "playing" && (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+              {currentGuess.map((color, index) => (
+                <div
+                  key={index}
+                  onDrop={(e) => handleDrop(e, index)}
+                  onDragOver={allowDrop} onDragEnter={(e) => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.borderColor = 'green'; }} onDragLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.borderColor = '#999'; }}
+                  style={{ width: 40, height: 40, borderRadius: '50%', border: '2px dashed #999', transition: 'transform 0.2s, border-color 0.2s',
+                    backgroundColor: color || '#eee',
+                    cursor: 'pointer'
+                  }}
+                ></div>
+              ))}
+              <button onClick={handleSubmit} style={{ padding: '0.6rem 1.2rem', fontSize: '1rem', fontWeight: 'bold', borderRadius: '6px', backgroundColor: '#4CAF50', color: 'white', border: 'none', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.05)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}>Submit Guess</button>
+            </div>
+          </>
+        )}
+
+        <div>
+          {guesses.slice().reverse().map((entry, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
+              {entry.guess.map((c, j) => {
+                const type = entry.feedback.detail[j];
+                let dotColor = 'black';
+                if (type === 'exact') dotColor = 'green';
+                else if (type === 'partial') dotColor = 'goldenrod';
+                return (
+                  <div key={j} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: 30,
+                        height: 30,
+                        borderRadius: '50%',
+                        backgroundColor: c,
+                        border: '2px solid #999'
+                      }}
+                    ></span>
+                    <span style={{ marginTop: 2, width: 6, height: 6, borderRadius: '50%', backgroundColor: dotColor }}></span>
+                  </div>
+                );
+              })}
+              <span style={{ marginLeft: '1rem' }}>🟩 {entry.feedback.exact} | 🟨 {entry.feedback.partial}</span>
+            </div>
+          ))}
+        </div>
+
+<hr style={{ margin: '3rem 0 1rem' }} />
+<div style={{ marginLeft: '1rem' }}>
+<ul>
+  <li><strong>🟩 Exact match:</strong> green dot beneath the peg</li>
+  <li><strong>🟨 Partial match:</strong> yellow dot beneath the peg</li>
+  <li><strong>⬛ No match:</strong> black square beneath the peg</li>
+</ul>
+</div>
+
+        
+      </div>
+
+      <div style={{ marginLeft: '2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        {COLORS.map((color) => (
+          <div
+            key={color}
+            draggable
+            onDragStart={(e) => handleDragStart(e, color)}
+            style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: color, border: '2px solid #333', cursor: 'grab', touchAction: 'none' }}
+          ></div>
+        ))}
+      </div>
+    </div>
+  );
+}
